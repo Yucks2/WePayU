@@ -52,7 +52,6 @@ javac -d out -cp "lib\easyaccept.jar" src\Main.java src\br\ufal\ic\p2\wepayu\*.j
 #No Linux ou macOS
 javac -d out -cp "lib/easyaccept.jar" src/Main.java src/br/ufal/ic/p2/wepayu/*.java src/br/ufal/ic/p2/wepayu/models/*.java src/br/ufal/ic/p2/wepayu/Exception/*.java src/br/ufal/ic/p2/wepayu/Services/*.java
 
-2. Executar os Testes de Aceitação
 Para rodar o sistema e executar os testes de aceitação automatizados (definidos em src/Main.java), utilize o comando abaixo:
 
 PowerShell
