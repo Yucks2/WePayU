@@ -42,7 +42,6 @@ Para compilar e executar o projeto, você precisará ter o JDK (Java Development
 
 Como Compilar e Executar o Projeto:
 
-1. Compilar o Código
 Execute o comando a seguir na raiz do projeto para compilar todos os arquivos fonte. Os arquivos .class serão gerados no diretório out.
 
 PowerShell
