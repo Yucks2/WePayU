@@ -36,7 +36,7 @@ public class TaxaServico implements Cloneable {
         try {
             return super.clone();
         }
-        catch (CloneNotSupportedException e) {
+        catch(CloneNotSupportedException e) {
             throw new InternalError(e.getMessage());
         }
     }

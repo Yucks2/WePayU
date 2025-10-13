@@ -2,30 +2,22 @@
 <java version="11.0.24" class="java.beans.XMLDecoder">
  <object class="java.util.HashMap">
   <void method="put">
-   <string>2</string>
-   <object class="br.ufal.ic.p2.wepayu.models.EmpregadoComissionado">
+   <string>1</string>
+   <object class="br.ufal.ic.p2.wepayu.models.EmpregadoHorista">
     <void property="agendaPagamento">
-     <string>semanal 2 5</string>
-    </void>
-    <void property="dataContratacao">
-     <object class="java.time.LocalDate" method="parse">
-      <string>2005-01-01</string>
-     </object>
+     <string>mensal 1</string>
     </void>
     <void property="endereco">
-     <string>Rua dos Bufoes, 333 - Campina Grande</string>
+     <string>Rua dos Jooes, 333 - Campina Grande</string>
     </void>
     <void property="metodoPagamento">
      <object class="br.ufal.ic.p2.wepayu.models.EmMaos"/>
     </void>
     <void property="nome">
-     <string>Gaiato Vendedor</string>
+     <string>Joao da Silva</string>
     </void>
     <void property="salario">
-     <double>2300.0</double>
-    </void>
-    <void property="taxaDeComissao">
-     <double>0.05</double>
+     <double>23.0</double>
     </void>
     <void property="ultimoPagamento">
      <object class="java.time.LocalDate" method="parse">
@@ -35,5 +27,5 @@
    </object>
   </void>
  </object>
- <int>4</int>
+ <int>2</int>
 </java>

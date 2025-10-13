@@ -7,7 +7,7 @@ public class Facade {
     private boolean sistemaEncerrado = false;
 
     private void verificarSistemaEncerrado() throws WePayUException {
-        if(sistemaEncerrado) {
+        if (sistemaEncerrado) {
             throw new WePayUException("Nao pode dar comandos depois de encerrarSistema.");
         }
     }
@@ -21,10 +21,15 @@ public class Facade {
         sistema.encerrarSistema();
         sistemaEncerrado = true;
     }
+    
+    public void criarAgendaDePagamentos(String descricao) throws WePayUException {
+        verificarSistemaEncerrado();
+        sistema.criarAgendaDePagamentos(descricao);
+    }
 
     public String criarEmpregado(String nome, String endereco, String tipo, String salario) throws WePayUException, EmpregadoNaoExisteException {
         verificarSistemaEncerrado();
-        if(tipo.equalsIgnoreCase("comissionado")) {
+        if (tipo.equalsIgnoreCase("comissionado")) {
             throw new WePayUException("Tipo nao aplicavel.");
         }
         return sistema.criarEmpregado(nome, endereco, tipo, salario, null);
@@ -67,10 +72,9 @@ public class Facade {
 
     public void alteraEmpregado(String emp, String atributo, String valor1, String banco, String agencia, String contaCorrente) throws WePayUException, EmpregadoNaoExisteException {
         verificarSistemaEncerrado();
-        if(atributo.equalsIgnoreCase("metodoPagamento") && valor1.equalsIgnoreCase("banco")) {
+        if (atributo.equalsIgnoreCase("metodoPagamento") && valor1.equalsIgnoreCase("banco")) {
             sistema.alteraEmpregadoPagamentoBanco(emp, banco, agencia, contaCorrente);
-        }
-        else {
+        } else {
              throw new WePayUException("Comando invalido.");
         }
     }

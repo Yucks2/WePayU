@@ -22,6 +22,7 @@ public class SistemaFolha {
     private Map<String, Empregado> empregados = new HashMap<>();
     private int proximoId = 1;
     private static final String DATA_FILE = "data.xml";
+    private static Set<String> agendasDisponiveis = new HashSet<>(Arrays.asList("semanal 5", "mensal $", "semanal 2 5"));
 
     private Stack<SistemaFolhaMemento> undoStack = new Stack<>();
     private Stack<SistemaFolhaMemento> redoStack = new Stack<>();
@@ -83,6 +84,7 @@ public class SistemaFolha {
         try(FileOutputStream fos = new FileOutputStream(DATA_FILE);
              BufferedOutputStream bos = new BufferedOutputStream(fos);
              XMLEncoder encoder = new XMLEncoder(bos)) {
+
             encoder.setPersistenceDelegate(LocalDate.class,
                 new PersistenceDelegate() {
                     @Override
@@ -96,7 +98,7 @@ public class SistemaFolha {
             encoder.writeObject(proximoId);
 
         }
-        catch(IOException e) {
+        catch (IOException e) {
             e.printStackTrace();
         }
     }
@@ -110,38 +112,118 @@ public class SistemaFolha {
             empregados = new HashMap<>();
         }
         proximoId = 1;
+        
+        agendasDisponiveis.clear();
+        agendasDisponiveis.addAll(Arrays.asList("semanal 5", "mensal $", "semanal 2 5"));
+
         File file = new File(DATA_FILE);
         if(file.exists()) {
             file.delete();
         }
+    }
+    
+    public void criarAgendaDePagamentos(String descricao) throws WePayUException {
+        if(agendasDisponiveis.contains(descricao)) {
+            throw new WePayUException("Agenda de pagamentos ja existe");
+        }
+        
+        String[] partes = descricao.split(" ");
+        String tipo = partes[0];
+        
+        if(tipo.equalsIgnoreCase("mensal")) {
+            if(partes.length != 2) throw new WePayUException("Descricao de agenda invalida");
+            if(partes[1].equals("$")) {
+            }
+            else {
+                try {
+                    int dia = Integer.parseInt(partes[1]);
+                    if(dia < 1 || dia > 28) throw new WePayUException("Descricao de agenda invalida");
+                } catch (NumberFormatException e) {
+                    throw new WePayUException("Descricao de agenda invalida");
+                }
+            }
+        }
+        else if(tipo.equalsIgnoreCase("semanal")) {
+            if(partes.length < 2 || partes.length > 3) throw new WePayUException("Descricao de agenda invalida");
+            try{
+                if(partes.length == 2) {
+                    int diaSemana = Integer.parseInt(partes[1]);
+                    if(diaSemana < 1 || diaSemana > 7) throw new WePayUException("Descricao de agenda invalida");
+                }
+                else {
+                    int semanas = Integer.parseInt(partes[1]);
+                    int diaSemana = Integer.parseInt(partes[2]);
+                    if(semanas < 1 || semanas > 52 || diaSemana < 1 || diaSemana > 7) {
+                        throw new WePayUException("Descricao de agenda invalida");
+                    }
+                }
+            }
+            catch (NumberFormatException e) {
+                throw new WePayUException("Descricao de agenda invalida");
+            }
+        }
+        else {
+            throw new WePayUException("Descricao de agenda invalida");
+        }
+        
+        agendasDisponiveis.add(descricao);
     }
 
     private boolean ehDiaDePagamento(Empregado e, LocalDate data) {
         if(e.getDataContratacao() != null && data.isBefore(e.getDataContratacao())) {
             return false;
         }
-
-        if(e instanceof EmpregadoHorista) {
-            return data.getDayOfWeek() == DayOfWeek.FRIDAY;
+    
+        String agenda = e.getAgendaPagamento();
+        if(agenda == null) {
+            if(e instanceof EmpregadoHorista) agenda = "semanal 5";
+            else if(e instanceof EmpregadoComissionado) agenda = "semanal 2 5";
+            else if(e instanceof EmpregadoAssalariado) agenda = "mensal $";
+            else return false;
         }
-        if(e instanceof EmpregadoAssalariado && !(e instanceof EmpregadoComissionado)) {
-            LocalDate ultimoDiaUtil = data.with(TemporalAdjusters.lastDayOfMonth());
-            while (ultimoDiaUtil.getDayOfWeek() == DayOfWeek.SATURDAY || ultimoDiaUtil.getDayOfWeek() == DayOfWeek.SUNDAY) {
-                ultimoDiaUtil = ultimoDiaUtil.minusDays(1);
+    
+        String[] partes = agenda.split(" ");
+        String tipo = partes[0];
+    
+        if("mensal".equalsIgnoreCase(tipo)) {
+            String dia = partes[1];
+            if("$".equals(dia)) {
+                LocalDate ultimoDiaUtil = data.with(TemporalAdjusters.lastDayOfMonth());
+                while(ultimoDiaUtil.getDayOfWeek() == DayOfWeek.SATURDAY || ultimoDiaUtil.getDayOfWeek() == DayOfWeek.SUNDAY) {
+                    ultimoDiaUtil = ultimoDiaUtil.minusDays(1);
+                }
+                return data.equals(ultimoDiaUtil);
             }
-            return data.equals(ultimoDiaUtil);
+            else {
+                return data.getDayOfMonth() == Integer.parseInt(dia);
+            }
         }
-        if(e instanceof EmpregadoComissionado) {
-            LocalDate dataContrato = e.getDataContratacao();
-            LocalDate primeiroPagamento = dataContrato.with(TemporalAdjusters.next(DayOfWeek.FRIDAY)).with(TemporalAdjusters.next(DayOfWeek.FRIDAY));
+        else if("semanal".equalsIgnoreCase(tipo)) {
+            int frequencia = partes.length == 3 ? Integer.parseInt(partes[1]) : 1;
+            int diaSemana = Integer.parseInt(partes[partes.length - 1]);
+    
+            if(data.getDayOfWeek().getValue() != diaSemana) {
+                return false;
+            }
+    
+            LocalDate dataAncora = e.getDataContratacao() != null ? e.getDataContratacao() : LocalDate.of(2005, 1, 1);
+            
+            LocalDate primeiroPagamento = dataAncora.with(TemporalAdjusters.nextOrSame(DayOfWeek.of(diaSemana)));
+
+            if(frequencia > 1) {
+                primeiroPagamento = primeiroPagamento.plusWeeks(frequencia - 1);
+            }
+            
             if(data.isBefore(primeiroPagamento)) {
                 return false;
             }
-            long daysBetween = ChronoUnit.DAYS.between(primeiroPagamento, data);
-            return daysBetween % 14 == 0 && data.getDayOfWeek() == DayOfWeek.FRIDAY;
+
+            long weeksBetween = ChronoUnit.WEEKS.between(primeiroPagamento, data);
+            return weeksBetween % frequencia == 0;
         }
         return false;
     }
+
 
     private String formatarValor(double valor) {
         return String.format("%.2f", valor).replace('.', ',');
@@ -160,10 +242,51 @@ public class SistemaFolha {
         }
         return formatarValor(total);
     }
+    
+    private LocalDate getPreviousPayday(Empregado e, LocalDate currentPayday) {
+        String agenda = e.getAgendaPagamento();
+         if(agenda == null) {
+            if(e instanceof EmpregadoHorista) agenda = "semanal 5";
+            else if(e instanceof EmpregadoComissionado) agenda = "semanal 2 5";
+            else if(e instanceof EmpregadoAssalariado) agenda = "mensal $";
+        }
+        String[] partes = agenda.split(" ");
+        String tipo = partes[0];
 
+        if("mensal".equalsIgnoreCase(tipo)) {
+            LocalDate previousMonth = currentPayday.minusMonths(1);
+            if("$".equals(partes[1])) {
+                LocalDate lastDay = previousMonth.with(TemporalAdjusters.lastDayOfMonth());
+                 while (lastDay.getDayOfWeek() == DayOfWeek.SATURDAY || lastDay.getDayOfWeek() == DayOfWeek.SUNDAY) {
+                    lastDay = lastDay.minusDays(1);
+                }
+                return lastDay;
+            }
+            else {
+                return previousMonth.withDayOfMonth(Integer.parseInt(partes[1]));
+            }
+        }
+        else if("semanal".equalsIgnoreCase(tipo)) {
+            int frequencia = partes.length == 3 ? Integer.parseInt(partes[1]) : 1;
+            return currentPayday.minusWeeks(frequencia);
+        }
+        return LocalDate.of(2004, 12, 31);
+    }
+    
     private Object[] calcularPagamento(Empregado e, LocalDate dataFim) throws EmpregadoNaoExisteException, WePayUException {
-        LocalDate dataInicio = (e.getUltimoPagamento() == null) ? LocalDate.of(2004, 12, 31) : e.getUltimoPagamento();
-        dataInicio = dataInicio.plusDays(1);
+        LocalDate dataInicio;
+        LocalDate previousPayday = getPreviousPayday(e, dataFim);
+        
+        if(e.getUltimoPagamento() != null && e.getUltimoPagamento().isAfter(previousPayday)) {
+            dataInicio = e.getUltimoPagamento().plusDays(1);
+        }
+        else {
+            dataInicio = previousPayday.plusDays(1);
+        }
+
+        if(e.getDataContratacao() != null && e.getDataContratacao().isAfter(dataInicio)) {
+             dataInicio = e.getDataContratacao();
+        }
 
         double salarioBruto = 0, descontos = 0, horasNormais = 0, horasExtras = 0, fixo = 0, vendas = 0, comissao = 0;
 
@@ -180,7 +303,16 @@ public class SistemaFolha {
         }
         else if(e instanceof EmpregadoComissionado) {
             EmpregadoComissionado c = (EmpregadoComissionado) e;
-            fixo = (c.getSalario() * 12) / 26.0;
+            String agenda = c.getAgendaPagamento();
+            if(agenda.startsWith("semanal")) {
+                String[] partes = agenda.split(" ");
+                int frequencia = partes.length == 3 ? Integer.parseInt(partes[1]) : 1;
+                fixo = (c.getSalario() * 12 / 52) * frequencia;
+            }
+            else {
+                fixo = c.getSalario();
+            }
+
             fixo = Math.floor((fixo * 100) + 1e-9) / 100.0;
             for(ResultadoDeVenda v : c.getVendas()) {
                 if(!v.getData().isBefore(dataInicio) && !v.getData().isAfter(dataFim)) {
@@ -192,7 +324,16 @@ public class SistemaFolha {
             salarioBruto = fixo + comissao;
         }
         else if(e instanceof EmpregadoAssalariado) {
-            salarioBruto = e.getSalario();
+            EmpregadoAssalariado a = (EmpregadoAssalariado) e;
+            String agenda = a.getAgendaPagamento();
+            if(agenda.startsWith("semanal")) {
+                String[] partes = agenda.split(" ");
+                int frequencia = partes.length == 3 ? Integer.parseInt(partes[1]) : 1;
+                salarioBruto = (a.getSalario() * 12 / 52) * frequencia;
+            }
+            else {
+                salarioBruto = e.getSalario();
+            }
         }
         
         salarioBruto = Math.floor((salarioBruto * 100) + 1e-9) / 100.0;
@@ -210,7 +351,7 @@ public class SistemaFolha {
                 dias = ChronoUnit.DAYS.between(e.getUltimoPagamento(), dataFim);
             }
 
-            if(e instanceof EmpregadoAssalariado && !(e instanceof EmpregadoComissionado)) {
+            if(e instanceof EmpregadoAssalariado && !(e instanceof EmpregadoComissionado) && e.getAgendaPagamento().startsWith("mensal")) {
                  dias = dataFim.lengthOfMonth();
             }
             
@@ -286,8 +427,9 @@ public class SistemaFolha {
         writer.println("==================================== ===== ===== ============= ========= =============== ======================================");
 
         double totalHoras = 0, totalExtra = 0, totalBruto = 0, totalDesc = 0, totalLiq = 0;
+
         if(!horistas.isEmpty()) {
-            for(Empregado e : horistas) {
+            for (Empregado e : horistas) {
                 Object[] p = pagamentos.get(e);
                 double horasNormais = (double) p[3];
                 double horasExtras = (double) p[4];
@@ -299,6 +441,7 @@ public class SistemaFolha {
                 totalLiq += (double) p[2];
 
                 String metodo;
+
                 if(e.getMetodoPagamento() instanceof Banco) {
                     metodo = ((Banco) e.getMetodoPagamento()).getDetalhes();
                 }
@@ -335,7 +478,7 @@ public class SistemaFolha {
 
         double totalBruto = 0, totalDesc = 0, totalLiq = 0;
         if(!assalariados.isEmpty()) {
-            for(Empregado e : assalariados) {
+            for (Empregado e : assalariados) {
                 Object[] p = pagamentos.get(e);
                 totalBruto += (double) p[0];
                 totalDesc += (double) p[1];
@@ -413,7 +556,7 @@ public class SistemaFolha {
             throw new SalarioInvalidoException("nao pode ser nulo.");
         }
         double salarioNumerico;
-        try {
+        try{
             salarioNumerico = Double.parseDouble(salario.replace(",", "."));
         }
         catch(NumberFormatException e) {
@@ -444,10 +587,10 @@ public class SistemaFolha {
 
             double comissaoNumerica;
 
-            try {
+            try{
                 comissaoNumerica = Double.parseDouble(comissao.replace(",", "."));
             }
-            catch(NumberFormatException e) {
+            catch (NumberFormatException e) {
                 throw new ComissaoInvalidaException("deve ser numerica.");
             }
             if(comissaoNumerica < 0) {
@@ -484,7 +627,7 @@ public class SistemaFolha {
             throw new EmpregadoNaoExisteException();
         }
 
-        switch (atributo.toLowerCase()) {
+        switch(atributo.toLowerCase()) {
             case "nome":
                 if(valor1 == null || valor1.isEmpty()) {
                     throw new NomeNuloException();
@@ -521,10 +664,10 @@ public class SistemaFolha {
                     throw new SalarioInvalidoException("nao pode ser nulo.");
                 }
                 double sal;
-                try { 
+                try{ 
                     sal = Double.parseDouble(valor1.replace(",", "."));
                 }
-                catch(Exception ex) {
+                catch (Exception ex) {
                     throw new SalarioInvalidoException("deve ser numerico.");
                 }
                 if(sal < 0) {
@@ -534,10 +677,10 @@ public class SistemaFolha {
                 if(e instanceof EmpregadoHorista) {
                     ((EmpregadoHorista) e).setSalario(sal);
                 }
-                else if (e instanceof EmpregadoAssalariado) {
+                else if(e instanceof EmpregadoAssalariado) {
                     ((EmpregadoAssalariado) e).setSalario(sal);
                 }
-                else if (e instanceof EmpregadoComissionado) {
+                else if(e instanceof EmpregadoComissionado) {
                     ((EmpregadoComissionado) e).setSalario(sal);
                 }
                 break;
@@ -549,7 +692,7 @@ public class SistemaFolha {
                     throw new ComissaoInvalidaException("nao pode ser nula.");
                 }
                 double com;
-                try {
+                try{
                     com = Double.parseDouble(valor1.replace(",", "."));
                 }
                 catch(Exception ex) {
@@ -587,6 +730,12 @@ public class SistemaFolha {
                 novoEmpregado.setMetodoPagamento(e.getMetodoPagamento());
                 empregados.put(emp, novoEmpregado);
                 break;
+            case "agendapagamento":
+                if(!agendasDisponiveis.contains(valor1)) {
+                    throw new AgendaPagamentoNaoDisponivelException();
+                }
+                e.setAgendaPagamento(valor1);
+                break;
             default:
                 throw new AtributoNaoExisteException();
         }
@@ -617,7 +766,7 @@ public class SistemaFolha {
 
         double taxaNumerica;
 
-        try {
+        try{
             taxaNumerica = Double.parseDouble(taxaSindical.replace(",", "."));
         }
         catch(Exception ex) {
@@ -658,7 +807,7 @@ public class SistemaFolha {
             throw new EmpregadoNaoExisteException();
         }
 
-        switch (atributo.toLowerCase()) {
+        switch(atributo.toLowerCase()) {
             case "nome": return e.getNome();
             case "endereco": return e.getEndereco();
             case "tipo": return e.getTipo();
@@ -696,6 +845,8 @@ public class SistemaFolha {
                     return String.format("%.2f", e.getMembroSindicato().getTaxaSindical()).replace('.', ',');
                 }
                 throw new EmpregadoNaoSindicalizadoException();
+            case "agendapagamento":
+                return e.getAgendaPagamento();
             default:
                 throw new AtributoNaoExisteException();
         }
@@ -716,15 +867,17 @@ public class SistemaFolha {
 
         double horasNumericas;
 
-        try {
+        try{
             horasNumericas = Double.parseDouble(horas.replace(",", "."));
         }
-        catch (NumberFormatException ex) {
+        catch(NumberFormatException ex) {
             throw new HorasInvalidasException();
         }
-        if(horasNumericas <= 0) throw new HorasInvalidasException();
+        if(horasNumericas <= 0) {
+            throw new HorasInvalidasException();
+        }
         LocalDate dataConvertida;
-        try {
+        try{
             DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
             dataConvertida = LocalDate.parse(data, formatador);
         }
@@ -749,13 +902,13 @@ public class SistemaFolha {
 
         DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
         LocalDate dInicial, dFinal;
-        try {
+        try{
             dInicial = LocalDate.parse(dataInicial, formatador);
         }
         catch (DateTimeParseException ex) {
             throw new DataInvalidaException("inicial");
         }
-        try {
+        try{
             dFinal = LocalDate.parse(dataFinal, formatador);
         }
         catch (DateTimeParseException ex) {
@@ -803,7 +956,7 @@ public class SistemaFolha {
 
         double valorNumerico;
 
-        try {
+        try{
             valorNumerico = Double.parseDouble(valor.replace(",", "."));
         }
         catch(NumberFormatException ex) {
@@ -812,8 +965,10 @@ public class SistemaFolha {
         if(valorNumerico <= 0) {
             throw new ValorDeveSerPositivoException();
         }
+
         LocalDate dataConvertida;
-        try {
+
+        try{
             DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
             dataConvertida = LocalDate.parse(data, formatador);
         }
@@ -838,13 +993,13 @@ public class SistemaFolha {
 
         DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
         LocalDate dInicial, dFinal;
-        try {
+        try{
             dInicial = LocalDate.parse(dataInicial, formatador);
         }
         catch(DateTimeParseException ex) {
             throw new DataInvalidaException("inicial");
         }
-        try {
+        try{
             dFinal = LocalDate.parse(dataFinal, formatador);
         }
         catch(DateTimeParseException ex) {
@@ -867,7 +1022,7 @@ public class SistemaFolha {
     }
 
     private Empregado getEmpregadoPorMembro(String idMembro) {
-        for (Empregado e : empregados.values()) {
+        for(Empregado e : empregados.values()) {
             if(e.isSindicalizado() && e.getMembroSindicato().getIdSindicato().equals(idMembro)) {
                 return e;
             }
@@ -888,7 +1043,7 @@ public class SistemaFolha {
 
         double valorNumerico;
 
-        try {
+        try{
             valorNumerico = Double.parseDouble(valor.replace(",", "."));
         }
         catch(NumberFormatException ex) {
@@ -899,7 +1054,7 @@ public class SistemaFolha {
         }
         
         LocalDate dataConvertida;
-        try {
+        try{
             DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
             dataConvertida = LocalDate.parse(data, formatador);
         }
@@ -926,13 +1081,13 @@ public class SistemaFolha {
 
         DateTimeFormatter formatador = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
         LocalDate dInicial, dFinal;
-        try {
+        try{
             dInicial = LocalDate.parse(dataInicial, formatador);
         }
         catch(DateTimeParseException ex) {
             throw new DataInvalidaException("inicial");
         }
-        try {
+        try{
             dFinal = LocalDate.parse(dataFinal, formatador);
         }
         catch(DateTimeParseException ex) {
