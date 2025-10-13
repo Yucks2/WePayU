@@ -97,7 +97,7 @@ id2=criarEmpregado nome="Beta Dois Assalariado" endereco="Rua Beta, 2 - Esparta"
 alteraEmpregado emp=${id2} atributo=agendaPagamento valor1="semanal 2 5"
 expect 0,00 totalFolha data=1/1/2005
 expect 0,00 totalFolha data=7/1/2005
-expect 1292,30totalFolha data=14/1/2005
+expect 1292,30 totalFolha data=14/1/2005
 expect 0,00 totalFolha data=21/1/2005
 expect 1292,30 totalFolha data=28/1/2005
 expect 0,00 totalFolha data=31/1/2005

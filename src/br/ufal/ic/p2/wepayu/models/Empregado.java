@@ -97,14 +97,15 @@ public abstract class Empregado implements Cloneable {
     public Object clone() {
         try {
             Empregado cloned = (Empregado) super.clone();
-            if (this.membroSindicato != null) {
+            if(this.membroSindicato != null) {
                 cloned.membroSindicato = (MembroSindicato) this.membroSindicato.clone();
             }
-             if (this.metodoPagamento != null) {
+             if(this.metodoPagamento != null) {
                 cloned.metodoPagamento = (MetodoPagamento) this.metodoPagamento.clone();
             }
             return cloned;
-        } catch (CloneNotSupportedException e) {
+        }
+        catch(CloneNotSupportedException e) {
             throw new InternalError(e.getMessage());
         }
     }
